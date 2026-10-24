@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Attendance Manager</title>
+<style>
+:root{--bg:#eef2f1;--cd:#fff;--tx:#14211f;--mu:#5d6d6a;--bd:#d5dedc;--ac:#0f766e;--ok:#15803d;--bad:#b91c1c;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1514;--cd:#18211f;--tx:#e6efed;--mu:#93a5a1;--bd:#2b3936;--ac:#2dd4bf;--ok:#4ade80;--bad:#f87171;color-scheme:dark}}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{padding:14px 14px 4px}h1{margin:0;font-size:20px}h2{font-size:16px;margin:0 0 6px}.mu{color:var(--mu)}
+nav{display:flex;gap:6px;padding:8px 14px;position:sticky;top:0;background:var(--bg);z-index:5}nav button{flex:1}
+main{padding:0 14px 90px;max-width:760px;margin:auto}
+.card{background:var(--cd);border:1px solid var(--bd);border-radius:10px;padding:12px;margin:0 0 12px}.lg{max-width:360px;margin:30px auto}
+.row{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+label{display:flex;flex-direction:column;gap:3px;font-size:13px;color:var(--mu);flex:1;min-width:110px}
+input,select,textarea,button{font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:8px 10px}
+input[type=checkbox]{width:auto}textarea{width:100%;min-height:90px}button{cursor:pointer}
+button.on,button.pri{background:var(--ac);border-color:var(--ac);color:#fff}
+.st{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--bd)}
+.st button{width:48px;font-weight:700}.st .p{color:var(--ok);border-color:var(--ok)}.st .a{color:var(--bad);border-color:var(--bad)}
+.ck{flex-direction:row;align-items:center;gap:8px;color:var(--tx);padding:5px 0;border-bottom:1px solid var(--bd)}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:6px 4px;border-bottom:1px solid var(--bd);font-size:14px}.wrap{overflow-x:auto}
+.big{font-size:38px;font-weight:700;line-height:1}.ok{color:var(--ok)}.bad{color:var(--bad)}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;background:var(--tx);color:var(--bg);padding:8px 14px;border-radius:20px;display:none;max-width:90%;z-index:9}
+.kpi{flex:1;text-align:center;padding:8px;border:1px solid var(--bd);border-radius:8px}.kpi b{display:block;font-size:26px}.wn{color:#d97706}
+</style></head><body>
+<header><h1>📋 Attendance Manager</h1><span id="who" class="mu"></span></header>
+<div id="lg"></div><nav id="nav" hidden></nav>
+<main id="mn" hidden>
+<section id="t-dash"><div id="dh"></div></section>
+<section id="t-marks" hidden><div id="mkv"></div></section>
+<section id="t-mark" hidden><div class="card"><h2>Mark attendance</h2>
+ <div class="row"><label>Date<input type="date" id="md"></label><label>Subject<select id="ms"></select></label><label>Periods<input type="number" id="mp" min="1" max="8" value="1"></label></div>
+ <div id="tt" class="row"></div><input id="mq" placeholder="Search student" style="width:100%">
+ <div class="row"><button onclick="allm(1)">All present</button><button onclick="allm(0)">All absent</button><button onclick="undo()">Undo</button><button class="pri" onclick="saveMark()">Save</button></div>
+ <div id="mc" class="mu"></div></div><div class="card" id="mg"></div></section>
+<section id="t-special" hidden><div class="card"><h2>Special attendance</h2>
+ <p class="mu" style="margin:0">Add attendance for selected students over a date range. Sundays and holidays are skipped.</p>
+ <div class="row"><label>Type<select id="xy"><option>Lab</option><option>Event OD</option><option>Certificate course</option><option>Medical leave</option><option>Correction</option></select></label><label>Subject<select id="xs"></select></label></div>
+ <div class="row"><label>From<input type="date" id="xf"></label><label>To<input type="date" id="xt"></label><label>Periods per day<input type="number" id="xp" min="1" max="8" value="1"></label></div>
+ <label>Note<input id="xn"></label>
+ <label class="ck"><input type="checkbox" id="xo"> Overwrite days where the student is already marked absent</label>
+ <div class="row"><button class="pri" onclick="applySp()">Add attendance</button></div><div id="xr" class="mu"></div></div>
+ <div class="card"><h2>Students</h2><input id="sq" placeholder="Search student" style="width:100%" oninput="spg()">
+ <div class="row"><button onclick="selAll(1)">Select shown</button><button onclick="selAll(0)">Clear shown</button><span id="xc" class="mu" style="align-self:center"></span></div><div id="sg"></div></div></section>
+<section id="t-student" hidden><div class="card"><div class="row"><label>Student<select id="ss" onchange="stu()"></select></label><label>Target %<input type="number" id="st" min="1" max="99" oninput="stu()"></label></div></div><div id="sr"></div><div id="ttg"></div></section>
+<section id="t-admin" hidden><div id="ad"></div></section>
+</main><div id="toast" role="status"></div>
+<script>
+const $=s=>document.querySelector(s),esc=t=>String(t).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let me=null,D={students:[],subjects:[],th:75,holidays:[]},cur={},hist=[],sel=new Set(),tab="mark",tmr;
+function flash(m){const t=$("#toast");t.textContent=m;t.style.display="block";clearTimeout(tmr);tmr=setTimeout(()=>t.style.display="none",2800)}
+async function api(p,b){const r=await fetch("/api/"+p,b===undefined?{}:{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b)});let j={};try{j=await r.json()}catch(e){}
+ if(!r.ok){if(r.status===401&&p!=="login")showLogin();{const e=new Error(j.error||"Something went wrong");e.data=j;throw e}}return j}
+const run=f=>async(...a)=>{try{await f(...a)}catch(e){flash(e.message)}};
+function advice(a,t,g){if(!t)return"No classes yet";if(a*100/t>=g){const k=Math.floor(a*100/g-t);return k>0?"Can miss "+k+" more":"Do not miss the next class"}return"Attend next "+Math.ceil((g*t-100*a)/(100-g))+" in a row"}
+function showLogin(msg){me=null;$("#nav").hidden=$("#mn").hidden=true;$("#who").textContent="";$("#lg").hidden=false;
+ $("#lg").innerHTML=`<div class="card lg"><h2>Log in</h2><label>Username or roll number<input id="lu" autocomplete="username"></label><label>Password<input id="lp" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></label><div class="row"><button class="pri" onclick="doLogin()">Log in</button></div><div id="le" class="bad">${msg||""}</div><p class="mu" style="margin:0">Students: your roll number is both username and first password. You will set a new password after logging in.</p></div>`}
+const doLogin=async()=>{try{me=await api("login",{username:$("#lu").value,password:$("#lp").value});me.must_change?forcePw():enter()}catch(e){$("#le").textContent=e.message}};
+function forcePw(){$("#lg").innerHTML=`<div class="card lg"><h2>Set a new password</h2><label>Current password<input id="n0" type="password"></label><label>New password (6+ characters)<input id="n1" type="password"></label><label>Repeat new password<input id="n2" type="password"></label><div class="row"><button class="pri" onclick="setPw()">Save password</button></div><div id="le" class="bad"></div></div>`}
+const setPw=async()=>{if($("#n1").value!==$("#n2").value)return $("#le").textContent="Passwords do not match";try{await api("password",{old:$("#n0").value,new:$("#n1").value});enter()}catch(e){$("#le").textContent=e.message}};
+async function enter(){const j=await api("bootstrap");D=j;me={user:j.user,role:j.role};$("#lg").hidden=true;$("#nav").hidden=$("#mn").hidden=false;
+ $("#who").innerHTML=esc(j.user)+" ("+j.role+") <button onclick='logout()'>Log out</button>";fillSubj();await go(j.role==="student"?"student":"dash")}
+const logout=async()=>{await api("logout",{});showLogin()};
+function fillSubj(){const o=D.subjects.map(s=>`<option>${esc(s)}</option>`).join("");$("#ms").innerHTML=o;$("#xs").innerHTML=o}
+function nav(){const R={admin:[["dash","Dashboard"],["mark","Mark"],["marks","Marks"],["special","Special"],["student","Student"],["admin","Admin"]],teacher:[["dash","Dashboard"],["mark","Mark"],["marks","Marks"],["special","Special"],["student","Student"]],student:[["student","My attendance"]]};
+ $("#nav").innerHTML=R[me.role].map(([k,l])=>`<button class="${tab===k?"on":""}" onclick="go('${k}')">${l}</button>`).join("")}
+const go=run(async k=>{if(me.role==="student")k="student";if(me.role==="teacher"&&k==="admin")k="dash";tab=k;["dash","marks","mark","special","student","admin"].forEach(x=>$("#t-"+x).hidden=x!==k);nav();
+ if(k==="mark")await loadCur();if(k==="student")await stu();if(k==="admin")await adm();if(k==="special")spg();if(k==="dash")await dash();if(k==="marks")await mk()});
+const dayOf=d=>(new Date(d+"T00:00:00").getDay()+6)%7;
+function tt(){const d=$("#md").value;if(!d){$("#tt").innerHTML="";return}const dw=dayOf(d);if(dw===6){$("#tt").innerHTML='<span class="mu">Sunday: no classes.</span>';return}
+ const m={};(D.timetable||[]).filter(x=>x.d===dw&&x.sub).forEach(x=>{const e=m[x.sub]=m[x.sub]||{n:0,p:[]};e.n+=x.n;e.p.push(x.n>1?`P${x.s}-${x.s+x.n-1}`:`P${x.s}`)});
+ $("#tt").innerHTML=Object.entries(m).map(([s,e])=>`<button onclick="pick('${esc(s)}',${e.n})">${esc(s)} <small>${e.p.join("+")}</small></button>`).join("")||'<span class="mu">No classes listed for this day. Admin can load the timetable.</span>'}
+function pick(s,n){$("#ms").value=s;$("#mp").value=n;loadCur()}
+function ttGrid(){const T=D.timetable||[];if(!T.length){$("#ttg").innerHTML="";return}
+ const rows=["Mon","Tue","Wed","Thu","Fri","Sat"].map((dn,i)=>{let c="",p=1;const sl=T.filter(x=>x.d===i);while(p<=7){const x=sl.find(y=>y.s===p);if(!x){c+="<td></td>";p++;continue}c+=`<td colspan="${x.n}" class="${x.sub?"":"mu"}">${esc(x.sub||x.label)}</td>`;p+=x.n}return`<tr><th>${dn}</th>${c}</tr>`}).join("");
+ const info=Object.entries(D.info||{}).map(([k,v])=>`<div class="mu" style="font-size:13px"><b>${esc(k)}</b>: ${esc(v.full||"")}${v.teacher?" · "+esc(v.teacher):""}</div>`).join("");
+ $("#ttg").innerHTML=`<div class="card wrap"><h2>Timetable</h2><table><tr><th></th>${[1,2,3,4,5,6,7].map(n=>"<th>P"+n+"</th>").join("")}</tr>${rows}</table></div><div class="card">${info}</div>`}
+const loadTT=run(async()=>{await api("timetable/default",{});D=await api("bootstrap");fillSubj();flash("Timetable and subjects loaded");adm()});
+const lvl={High:"bad",Medium:"wn",Low:"ok"};let rk=null,rf="all",asl=[];
+const dash=run(async()=>{rk=await api("risk");drawDash()});
+function drawDash(){const s=rk.summary,rows=rk.rows.filter(r=>rf==="all"||r.level===rf);
+ $("#dh").innerHTML=`<div class="card"><h2>ClassPulse: early support dashboard</h2><div class="row"><div class="kpi bad"><b>${s.high}</b>High</div><div class="kpi wn"><b>${s.medium}</b>Medium</div><div class="kpi ok"><b>${s.low}</b>Low</div></div><p class="mu" style="margin:6px 0 0"><b>${s.early}</b> flagged student(s) are still above the ${s.th}% minimum, so teachers can help before a shortage happens. Flags are advice only; the teacher decides the follow-up.</p><div class="row"><select onchange="rf=this.value;drawDash()">${["all","High","Medium","Low"].map(x=>`<option ${x===rf?"selected":""}>${x}</option>`).join("")}</select></div></div>`+rows.map(r=>`<div class="card"><div class="st" style="border:0"><span><b>${esc(r.roll)}</b> ${esc(r.name)}</span><b class="${lvl[r.level]}">${r.level}</b></div><div class="mu">Attendance ${r.att===null?"–":r.att+"%"} · last 2 weeks ${r.recent===null?"–":r.recent+"%"} · Marks ${r.marks===null?"–":r.marks+"%"}</div>${r.reasons.length?"<ul style='margin:6px 0;padding-left:18px'>"+r.reasons.map(x=>"<li>"+esc(x)+"</li>").join("")+"</ul>":""}<button onclick="notes('${esc(r.roll)}')">Follow-up notes${r.open_notes?" ("+r.open_notes+" open)":""}</button><div id="n-${esc(r.roll)}"></div></div>`).join("")||'<div class="card mu">No students yet. Admin can load demo data.</div>'}
+const notes=run(async r=>{const L=await api("notes?roll="+encodeURIComponent(r));$("#n-"+r).innerHTML=`<div style="margin-top:8px">${L.map(n=>`<div class="mu" style="padding:4px 0;border-top:1px solid var(--bd)">${esc(n.ts)} · ${esc(n.author)} · ${esc(n.action)} · <b>${n.status}</b><br>${esc(n.text)} ${n.status==="open"?`<button onclick="nst(${n.id},'resolved','${r}')">Mark resolved</button>`:""}</div>`).join("")}<div class="row"><select id="na-${r}"><option>Counselling</option><option>Parent call</option><option>Extra class</option><option>Mentor assigned</option><option>Other</option></select><input id="nt-${r}" placeholder="What did you do or plan?" style="flex:2"><button class="pri" onclick="addN('${r}')">Add note</button></div></div>`});
+const addN=run(async r=>{await api("notes",{roll:r,action:$("#na-"+r).value,text:$("#nt-"+r).value});flash("Note added");await dash();await notes(r)});
+const nst=run(async(id,s,r)=>{await api("notes/status",{id,status:s});await dash();await notes(r)});
+const mk=run(async()=>{asl=await api("assessments");drawMk()});
+function drawMk(){$("#mkv").innerHTML=`<div class="card"><h2>New test</h2><div class="row"><label>Subject<select id="as">${D.subjects.map(s=>`<option>${esc(s)}</option>`).join("")}</select></label><label>Test name<input id="an" value="Unit Test 1"></label><label>Date<input type="date" id="ad2" value="${t0}"></label><label>Max marks<input type="number" id="am" value="25"></label></div><div class="row"><button class="pri" onclick="addA()">Create test</button></div></div><div class="card"><h2>Enter marks</h2><label>Test<select id="ao" onchange="loadS()">${asl.map(a=>`<option value="${a.id}">${esc(a.subject)} · ${esc(a.name)} · ${a.day} (max ${a.max})</option>`).join("")}</select></label><div id="sc"></div></div>`;if(asl.length)loadS()}
+const addA=run(async()=>{await api("assessments",{subject:$("#as").value,name:$("#an").value,date:$("#ad2").value,max:+$("#am").value});flash("Test created");await mk()});
+const loadS=run(async()=>{const m=await api("scores?id="+$("#ao").value);$("#sc").innerHTML=D.students.map(s=>`<div class="st"><span><b>${esc(s.r)}</b> ${esc(s.n)}</span><input type="number" step="0.5" min="0" data-r="${esc(s.r)}" value="${m[s.r]??""}" style="width:80px"></div>`).join("")+'<div class="row"><button class="pri" onclick="saveS()">Save marks</button></div>'});
+const saveS=run(async()=>{const o={};document.querySelectorAll("#sc input").forEach(i=>o[i.dataset.r]=i.value);await api("scores",{id:+$("#ao").value,scores:o});flash("Marks saved")});
+const saveRk=run(async()=>{const o={};["att_high","marks_high","marks_med","drop","consec"].forEach(k=>o[k]=+$("#rk-"+k).value);await api("risk/config",o);flash("Rules saved")});
+const demo=run(async f=>{await api(f?"demo":"demo/clear",{});D=await api("bootstrap");fillSubj();flash(f?"Demo data loaded":"Demo data removed");adm()});
+const loadCur=run(async()=>{tt();const d=$("#md").value,sj=$("#ms").value;if(!d||!sj)return;const j=await api(`marks?date=${d}&subject=${encodeURIComponent(sj)}`);hist=[];cur={};D.students.forEach(s=>cur[s.r]=j.marks[s.r]!==undefined?j.marks[s.r]:1);if(j.periods)$("#mp").value=j.periods;grid()});
+function grid(){const f=$("#mq").value.toLowerCase();$("#mg").innerHTML=D.students.map((s,i)=>({s,i})).filter(o=>(o.s.n+o.s.r).toLowerCase().includes(f)).map(o=>`<div class="st"><span><b>${esc(o.s.r)}</b> ${esc(o.s.n)}</span><button class="${cur[o.s.r]?"p":"a"}" onclick="tg(${o.i})">${cur[o.s.r]?"P":"A"}</button></div>`).join("")||'<span class="mu">No students found.</span>';const p=D.students.filter(s=>cur[s.r]).length;$("#mc").textContent=p+" present, "+(D.students.length-p)+" absent"}
+const push=()=>{hist.push(JSON.stringify(cur));if(hist.length>50)hist.shift()};
+function tg(i){push();const r=D.students[i].r;cur[r]=cur[r]?0:1;grid()}
+function allm(v){push();D.students.forEach(s=>cur[s.r]=v);grid()}
+function undo(){if(!hist.length)return flash("Nothing to undo");cur=JSON.parse(hist.pop());grid()}
+const saveMark=run(async()=>{await api("marks",{date:$("#md").value,subject:$("#ms").value,periods:+$("#mp").value||1,marks:cur});flash("Saved")});
+function spg(){const f=$("#sq").value.toLowerCase();$("#sg").innerHTML=D.students.map((s,i)=>({s,i})).filter(o=>(o.s.n+o.s.r).toLowerCase().includes(f)).map(o=>`<label class="ck"><input type="checkbox" ${sel.has(o.s.r)?"checked":""} onchange="ts(${o.i},this.checked)"> <b>${esc(o.s.r)}</b> ${esc(o.s.n)}</label>`).join("");$("#xc").textContent=sel.size+" selected"}
+function ts(i,c){const r=D.students[i].r;c?sel.add(r):sel.delete(r);$("#xc").textContent=sel.size+" selected"}
+function selAll(v){const f=$("#sq").value.toLowerCase();D.students.forEach(s=>{if((s.n+s.r).toLowerCase().includes(f))v?sel.add(s.r):sel.delete(s.r)});spg()}
+const applySp=run(async()=>{const j=await api("special",{type:$("#xy").value,subject:$("#xs").value,from:$("#xf").value,to:$("#xt").value,periods:+$("#xp").value||1,overwrite:$("#xo").checked,note:$("#xn").value,rolls:[...sel]});
+ $("#xr").textContent=`Added ${j.added} entries over ${j.days} working day(s).`+(j.skipped?` ${j.skipped} absent entries left unchanged; tick overwrite to change them.`:"");flash("Attendance added")});
+const stu=run(async()=>{const e=$("#ss"),k=e.value||0;e.innerHTML=D.students.map((s,i)=>`<option value="${i}">${esc(s.r)} – ${esc(s.n)}</option>`).join("");e.value=me.role==="student"?0:k;e.disabled=me.role==="student";
+ const s=D.students[+e.value];if(!s)return;const g=+$("#st").value||D.th,j=await api("stats/"+encodeURIComponent(s.r)),o=j.overall,p=o.t?o.a*100/o.t:null;
+ $("#sr").innerHTML=`<div class="card"><div class="big ${p===null?"mu":p>=D.th?"ok":"bad"}">${p===null?"–":p.toFixed(1)+"%"}</div><div class="mu">${o.a} of ${o.t} periods attended · ${p===null?"no data":p>=D.th?"Eligible":"Shortage"} (minimum ${D.th}%)</div><p style="margin:8px 0 0">${advice(o.a,o.t,g)}${g!==D.th?" (to reach "+g+"%)":""}</p></div>
+ <div class="card wrap"><table><tr><th>Subject</th><th>Attended</th><th>%</th><th>What next</th></tr>${Object.entries(j.subjects).map(([n,x])=>`<tr><td>${esc(n)}</td><td>${x.a}/${x.t}</td><td class="${x.t&&x.a*100/x.t>=D.th?"ok":"bad"}">${x.t?Math.round(x.a*100/x.t)+"%":"–"}</td><td>${advice(x.a,x.t,g)}</td></tr>`).join("")}</table></div>${j.marks&&j.marks.length?`<div class="card wrap"><h2>Test marks</h2><table><tr><th>Test</th><th>Subject</th><th>Marks</th></tr>${j.marks.map(m=>`<tr><td>${esc(m.name)}</td><td>${esc(m.subject)}</td><td>${m.got===null?"–":m.got+"/"+m.max}</td></tr>`).join("")}</table></div>`:""}`;ttGrid()});
+const adm=run(async()=>{const[sh,tc,au,cf]=await Promise.all([api("shortage"),api("users"),api("audit"),api("risk/config")]);
+ $("#ad").innerHTML=`<div class="card"><h2>Minimum attendance</h2><label>Percent<input type="number" id="at" value="${D.th}" min="1" max="99" onchange="setTh(+this.value)"></label></div>
+ <div class="card wrap"><h2>Shortage list (${sh.length})</h2>${sh.length?`<table><tr><th>Roll</th><th>Name</th><th>%</th></tr>${sh.map(x=>`<tr><td>${esc(x.r)}</td><td>${esc(x.n)}</td><td class="bad">${x.p}%</td></tr>`).join("")}</table>`:'<span class="mu">No students below the minimum.</span>'}<div class="row"><a href="/api/export.csv"><button>Download CSV</button></a></div></div>
+ <div class="card"><h2>Accounts</h2><p class="mu" style="margin:0">Students log in with their roll number (first password is the roll number). Everyone sets their own password at first login.</p><div class="row"><label>Teacher username<input id="nu"></label><label>Temporary password<input id="np"></label></div><div class="row"><button onclick="addT()">Add teacher</button></div><label>Reset password for user<input id="ru" placeholder="username or roll"></label><div class="row"><button onclick="resetP()">Reset to the temporary password above</button></div><div class="mu">Teachers: ${tc.map(esc).join(", ")||"none"}</div></div>
+ <div class="card"><h2>Risk rules (ClassPulse)</h2><div class="row">${[["att_high","High risk if attendance below %"],["marks_high","High risk if marks below %"],["marks_med","Watch if marks below %"],["drop","A fall of this many points counts"],["consec","Days absent in a row"]].map(([k,l])=>`<label>${l}<input type="number" id="rk-${k}" value="${cf[k]}"></label>`).join("")}</div><div class="row"><button onclick="saveRk()">Save rules</button></div></div>
+ <div class="card"><h2>Demo data</h2><p class="mu" style="margin:0">Adds 45 synthetic students (DEMO01 to DEMO45, password demo1234) with 6 weeks of attendance and two tests per subject, for a safe demo. Your real data is not touched.</p><div class="row"><button class="pri" onclick="demo(1)">Load demo data</button><button onclick="demo(0)">Remove demo data</button></div></div>
+ <div class="card"><h2>Setup</h2><label>Students (roll, name per line)<textarea id="cs">${esc(D.students.map(s=>s.r+", "+s.n).join("\n"))}</textarea></label><label>Subjects (comma separated)<input id="cj" value="${esc(D.subjects.join(", "))}"></label><label>Holidays (YYYY-MM-DD, one per line)<textarea id="ch">${esc(D.holidays.join("\n"))}</textarea></label><div class="row"><button class="pri" onclick="setup()">Save setup</button><button onclick="loadTT()">Load class timetable</button></div></div>
+ <div class="card"><h2>Audit log</h2>${au.map(l=>`<div class="mu" style="padding:3px 0">${esc(l.ts)} · ${esc(l.who||"")}: ${esc(l.t)}</div>`).join("")||'<span class="mu">No changes yet.</span>'}</div>`});
+const setTh=run(async v=>{await api("threshold",{th:v});D.th=v;flash("Saved");adm()});
+const addT=run(async()=>{await api("users",{username:$("#nu").value,password:$("#np").value});flash("Teacher added");adm()});
+const resetP=run(async()=>{await api("users/reset",{username:$("#ru").value,password:$("#np").value});flash("Reset. The user sets a new password at next login")});
+const setup=run(async()=>{const body={students:$("#cs").value.split("\n").map(l=>l.split(",")).filter(a=>a[0].trim()).map(a=>({r:a[0].trim(),n:(a.slice(1).join(",")||a[0]).trim()})),subjects:$("#cj").value.split(","),holidays:$("#ch").value.split("\n").map(x=>x.trim()).filter(Boolean)};try{await api("setup",body)}catch(e){if(e.data&&e.data.need_confirm&&confirm("This permanently deletes attendance and marks for removed students or subjects.\n\nStudents: "+(e.data.students.join(", ")||"none")+"\nSubjects: "+(e.data.subjects.join(", ")||"none")+"\n\nContinue?")){body.confirm_delete=true;await api("setup",body)}else throw e}
+ const j=await api("bootstrap");D=j;fillSubj();flash("Setup saved");adm()});
+const t0=new Date().toISOString().slice(0,10);$("#md").value=$("#xf").value=$("#xt").value=t0;
+$("#md").onchange=loadCur;$("#ms").onchange=()=>{$("#mp").value=/lab/i.test($("#ms").value)?2:1;loadCur()};$("#mq").oninput=grid;
+api("me").then(enter).catch(()=>showLogin());
+</script></body></html>
