@@ -1,0 +1,27 @@
+databases:
+  - name: classpulse-db
+    plan: free
+    region: singapore
+    databaseName: attendance
+    user: attendance
+services:
+  - type: web
+    name: classpulse-attendance
+    runtime: python
+    plan: free
+    region: singapore
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -w 1 --threads 4 -b 0.0.0.0:$PORT app:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: COOKIE_SECURE
+        value: "1"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: classpulse-db
+          property: connectionString

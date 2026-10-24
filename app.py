@@ -17,9 +17,19 @@ def secret():
     return open(p).read().strip()
 
 FAILS = {}
+
+def db_url():
+    u = (os.environ.get("DATABASE_URL") or "").strip()
+    if not u: return "sqlite:///" + DBFILE
+    i = u.find("postgres")
+    if i > 0: u = u[i:]  # ignore stray characters before the URL
+    for old in ("postgresql+psycopg://", "postgresql://", "postgres://"):
+        if u.startswith(old):
+            u = "postgresql+psycopg://" + u[len(old):]; break
+    return u.replace("&channel_binding=require", "").replace("channel_binding=require&", "")
 app = Flask(__name__, static_folder="static", static_url_path="")
 app.config.update(
-    SQLALCHEMY_DATABASE_URI=os.environ.get("DATABASE_URL", "sqlite:///" + DBFILE),
+    SQLALCHEMY_DATABASE_URI=db_url(),
     SECRET_KEY=secret(),
     SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=os.environ.get("COOKIE_SECURE") == "1")
