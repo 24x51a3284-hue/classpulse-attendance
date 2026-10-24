@@ -6,7 +6,7 @@ databases:
     user: attendance
 services:
   - type: web
-    name: classpulse-attendance
+    name: classpulse-live
     runtime: python
     plan: free
     region: singapore
